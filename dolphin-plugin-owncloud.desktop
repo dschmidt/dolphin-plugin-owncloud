@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Service
+Name=ownCloud
+
+X-KDE-ServiceTypes=FileViewVersionControlPlugin
+MimeType=text/plain;
+X-KDE-Library=dolphin-plugin-owncloud
