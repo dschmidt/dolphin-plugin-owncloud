@@ -3,8 +3,10 @@
 
 
 #include <kversioncontrolplugin2.h>
+#include <KDE/KFileItem>
 
 class QTimer;
+class KAction;
 
 class DolphinPluginOwnCloud : public KVersionControlPlugin2
 {
@@ -19,6 +21,14 @@ public:
     QList<QAction*> actions(const KFileItemList& items) const;
     ItemVersion itemVersion(const KFileItem& item) const;
     QString fileName() const;
+
+private slots:
+    void showStupidBox() const;
+
+private:
+    mutable QList<KUrl> m_currentUrls;;
+
+    KAction* m_dummyAction;
 };
 
 #endif
