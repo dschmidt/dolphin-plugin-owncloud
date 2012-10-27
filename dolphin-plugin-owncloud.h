@@ -7,6 +7,7 @@
 
 class QTimer;
 class KAction;
+class QLocalSocket;
 
 class DolphinPluginOwnCloud : public KVersionControlPlugin2
 {
@@ -24,11 +25,13 @@ public:
 
 private slots:
     void showStupidBox() const;
+    void sendCommand(const QString& command) const;
 
 private:
     mutable QList<KUrl> m_currentUrls;;
 
     KAction* m_dummyAction;
+    QLocalSocket* m_owncloudSocket;
 };
 
 #endif

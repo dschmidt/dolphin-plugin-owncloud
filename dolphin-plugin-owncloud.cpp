@@ -9,6 +9,8 @@
 #include <QDebug>
 #include <QTimer>
 #include <QMessageBox>
+#include <QLocalSocket>
+#include <QThread>
 
 K_PLUGIN_FACTORY(DolphinPluginOwnCloudFactory, registerPlugin<DolphinPluginOwnCloud>();)
 K_EXPORT_PLUGIN(DolphinPluginOwnCloudFactory("dolphin-plugin-owncloud"))
@@ -16,6 +18,7 @@ K_EXPORT_PLUGIN(DolphinPluginOwnCloudFactory("dolphin-plugin-owncloud"))
 
 DolphinPluginOwnCloud::DolphinPluginOwnCloud(QObject* parent, const QList< QVariant >& args)
     : KVersionControlPlugin2(parent)
+    , m_owncloudSocket(new QLocalSocket(this))
 {
     Q_UNUSED(args);
     qDebug() << Q_FUNC_INFO;
@@ -36,6 +39,8 @@ DolphinPluginOwnCloud::~DolphinPluginOwnCloud()
 bool DolphinPluginOwnCloud::beginRetrieval(const QString& directory)
 {
     qDebug() << Q_FUNC_INFO;
+
+    sendCommand("RETRIEVE_STATUS:"+directory.toUtf8());
 
     return true;
 }
@@ -72,7 +77,32 @@ QString DolphinPluginOwnCloud::fileName() const
     return QLatin1String(fileName);
 }
 
+void DolphinPluginOwnCloud::sendCommand(const QString& command) const
+{
+    if ( QThread::currentThread() != thread() )
+    {
+        QMetaObject::invokeMethod(this, "sendCommand", Qt::QueuedConnection, Q_ARG(QString, command));
+        return;
+    }
+
+
+    qDebug() << Q_FUNC_INFO << command;
+
+    if(!m_owncloudSocket)
+        m_owncloudSocket
+    if(!m_owncloudSocket->isOpen())
+    {
+        m_owncloudSocket->connectToServer("ownCloud");
+        m_owncloudSocket->waitForConnected();
+    }
+
+    QString localCommand = command;
+    m_owncloudSocket->write(localCommand.append("\n").toUtf8());
+}
+
 void DolphinPluginOwnCloud::showStupidBox() const
 {
-    QMessageBox::information(0, "Stupid Alert", "Something useful could happen instead with " + m_currentUrls.first().toLocalFile());
+    QMessageBox::information(0, "Stupid Alert", "Doing an api request for " + m_currentUrls.first().toLocalFile());
+
+    sendCommand(QString(QLatin1String("ONLINELINK:%1")).arg(m_currentUrls.first().toLocalFile()));
 }
