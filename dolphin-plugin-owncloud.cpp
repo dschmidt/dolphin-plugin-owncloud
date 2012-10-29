@@ -30,6 +30,8 @@ DolphinPluginOwnCloud::DolphinPluginOwnCloud(QObject* parent, const QList< QVari
     connect(m_dummyAction, SIGNAL(triggered()),
             this, SLOT(showStupidBox()));
 
+    connect(m_owncloudSocket, SIGNAL(readyRead()), SLOT(onReadyRead()));
+    m_owncloudSocket->connectToServer("ownCloud");
 }
 
 DolphinPluginOwnCloud::~DolphinPluginOwnCloud()
@@ -139,6 +141,22 @@ void DolphinPluginOwnCloud::showStupidBox() const
 }
 
 
+void DolphinPluginOwnCloud::onReadyRead()
+{
+    QLocalSocket* socket = qobject_cast<QLocalSocket*>(sender());
+    Q_ASSERT(socket);
+
+    qDebug() << "******************************* JAAAAAAAAAAAAAAAAAAAAAAA";
+    while(socket->canReadLine())
+    {
+        QString line = socket->readLine();
+        qDebug() << Q_FUNC_INFO << line;
+        if(line.startsWith("UPDATE_VIEW"))
+            emit itemVersionsChanged();
+    }
+}
+
+
 KVersionControlPlugin2::ItemVersion DolphinPluginOwnCloud::itemVersionForString(const QString& version) const
 {
     qDebug() << Q_FUNC_INFO << version;
@@ -151,14 +169,17 @@ KVersionControlPlugin2::ItemVersion DolphinPluginOwnCloud::itemVersionForString(
     {
         return AddedVersion;
     }
+    if(version == QLatin1String("STATUS_EVAL"))
+    {
+        return LocallyModifiedVersion;
+    }
     else if( version == QLatin1String("STATUS_STAT_ERROR") || version == QLatin1String("STATUS_ERROR"))
     {
         return UnversionedVersion;
     }
-    else if(version == QLatin1String("STATUS_EVAL") || version == QLatin1String("STATUS_REMOVE") || version == QLatin1String("STATUS_UPDATED"))
+    else if(version == QLatin1String("STATUS_REMOVE") || version == QLatin1String("STATUS_UPDATED"))
     {
         qDebug() << Q_FUNC_INFO << version;
-        Q_ASSERT(false);
         return UnversionedVersion;
     }
     else if(version == QLatin1String("STATUS_CONFLICT"))

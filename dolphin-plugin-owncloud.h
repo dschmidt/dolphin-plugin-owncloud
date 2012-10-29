@@ -27,6 +27,8 @@ private slots:
     void showStupidBox() const;
     void sendCommand(const QString& command, QLocalSocket* socket = 0) const;
 
+    void onReadyRead();
+
 private:
     ItemVersion itemVersionForString(const QString& version) const;
 
