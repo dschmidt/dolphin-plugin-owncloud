@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QLocalSocket>
 #include <QThread>
+#include <QFileInfo>
 
 K_PLUGIN_FACTORY(DolphinPluginOwnCloudFactory, registerPlugin<DolphinPluginOwnCloud>();)
 K_EXPORT_PLUGIN(DolphinPluginOwnCloudFactory("dolphin-plugin-owncloud"))
@@ -25,7 +26,7 @@ DolphinPluginOwnCloud::DolphinPluginOwnCloud(QObject* parent, const QList< QVari
 
     m_dummyAction = new KAction(this);
     m_dummyAction->setIcon(KIcon("internet-web-browser"));
-    m_dummyAction->setText(i18nc("@item:inmenu", "Do something not very useful..."));
+    m_dummyAction->setText(i18nc("@item:inmenu", "Copy public link to clipboard"));
     connect(m_dummyAction, SIGNAL(triggered()),
             this, SLOT(showStupidBox()));
 
@@ -40,7 +41,44 @@ bool DolphinPluginOwnCloud::beginRetrieval(const QString& directory)
 {
     qDebug() << Q_FUNC_INFO;
 
-    sendCommand("RETRIEVE_STATUS:"+directory.toUtf8());
+    QLocalSocket* socket = new QLocalSocket();
+
+    sendCommand("RETRIEVE_STATUS:"+directory.toUtf8(), socket);
+    socket->waitForReadyRead();
+
+    while(socket->canReadLine())
+    {
+        QString line = socket->readLine().trimmed();
+        QStringList splittedLine = line.split(":");
+
+        if(splittedLine.count() != 3) continue;
+
+        QString filePath = splittedLine.at(2);
+        QString status = splittedLine.at(1);
+
+        if(splittedLine.first() == "STATUS")
+        {
+            QFileInfo fileInfo( filePath );
+            if(fileInfo.exists())
+            {
+//                 qDebug() << "storing: " << filePath << status;
+                m_status[filePath] = itemVersionForString(status);
+            }
+            else
+                qDebug() << "received invalid file path";
+        }
+        else
+        {
+            qDebug() << "Hit race condition :\"";
+            Q_ASSERT(false);
+        }
+
+//         qDebug() << "FILESTATUS RECEIVED: " << line;
+
+    }
+
+    socket->close();
+    socket->deleteLater();
 
     return true;
 }
@@ -67,7 +105,7 @@ KVersionControlPlugin2::ItemVersion DolphinPluginOwnCloud::itemVersion(const KFi
     qDebug() << Q_FUNC_INFO << item.localPath();
 
     // pretend everything is synced until we have an api for this
-    return NormalVersion;
+    return m_status.value(item.localPath(), UnversionedVersion);
 }
 
 QString DolphinPluginOwnCloud::fileName() const
@@ -77,32 +115,34 @@ QString DolphinPluginOwnCloud::fileName() const
     return QLatin1String(fileName);
 }
 
-void DolphinPluginOwnCloud::sendCommand(const QString& command) const
+void DolphinPluginOwnCloud::sendCommand(const QString& command, QLocalSocket* socket) const
 {
-    if ( QThread::currentThread() != thread() )
-    {
-        QMetaObject::invokeMethod(this, "sendCommand", Qt::QueuedConnection, Q_ARG(QString, command));
-        return;
-    }
+    if(!socket)
+        socket = m_owncloudSocket;
 
 
     qDebug() << Q_FUNC_INFO << command;
 
-    if(!m_owncloudSocket)
-        m_owncloudSocket
-    if(!m_owncloudSocket->isOpen())
+    if(!socket->isOpen())
     {
-        m_owncloudSocket->connectToServer("ownCloud");
-        m_owncloudSocket->waitForConnected();
+        socket->connectToServer("ownCloud");
+        socket->waitForConnected();
     }
 
     QString localCommand = command;
-    m_owncloudSocket->write(localCommand.append("\n").toUtf8());
+    socket->write(localCommand.append("\n").toUtf8());
 }
 
 void DolphinPluginOwnCloud::showStupidBox() const
 {
-    QMessageBox::information(0, "Stupid Alert", "Doing an api request for " + m_currentUrls.first().toLocalFile());
+    sendCommand(QString(QLatin1String("PUBLIC_SHARE_LINK:%1")).arg(m_currentUrls.first().toLocalFile()));
+}
 
-    sendCommand(QString(QLatin1String("ONLINELINK:%1")).arg(m_currentUrls.first().toLocalFile()));
+
+KVersionControlPlugin2::ItemVersion DolphinPluginOwnCloud::itemVersionForString(const QString& version) const
+{
+    if(version == "needsupdate")
+        return UpdateRequiredVersion;
+    else
+        return NormalVersion;
 }

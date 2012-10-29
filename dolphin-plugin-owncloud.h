@@ -25,13 +25,17 @@ public:
 
 private slots:
     void showStupidBox() const;
-    void sendCommand(const QString& command) const;
+    void sendCommand(const QString& command, QLocalSocket* socket = 0) const;
 
 private:
-    mutable QList<KUrl> m_currentUrls;;
+    ItemVersion itemVersionForString(const QString& version) const;
+
+private:
+    mutable QList<KUrl> m_currentUrls;
 
     KAction* m_dummyAction;
     QLocalSocket* m_owncloudSocket;
+    QMap<QString, ItemVersion> m_status;
 };
 
 #endif
