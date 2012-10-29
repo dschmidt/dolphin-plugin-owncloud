@@ -56,7 +56,7 @@ bool DolphinPluginOwnCloud::beginRetrieval(const QString& directory)
         QString filePath = splittedLine.at(2);
         QString status = splittedLine.at(1);
 
-        if(splittedLine.first() == "STATUS")
+        if(splittedLine.first().startsWith("STATUS"))
         {
             QFileInfo fileInfo( filePath );
             if(fileInfo.exists())
@@ -141,8 +141,40 @@ void DolphinPluginOwnCloud::showStupidBox() const
 
 KVersionControlPlugin2::ItemVersion DolphinPluginOwnCloud::itemVersionForString(const QString& version) const
 {
-    if(version == "needsupdate")
-        return UpdateRequiredVersion;
-    else
+    qDebug() << Q_FUNC_INFO << version;
+
+    if(version == QLatin1String("STATUS_NONE"))
+    {
         return NormalVersion;
+    }
+    if(version == QLatin1String("STATUS_NEW"))
+    {
+        return AddedVersion;
+    }
+    else if( version == QLatin1String("STATUS_STAT_ERROR") || version == QLatin1String("STATUS_ERROR"))
+    {
+        return UnversionedVersion;
+    }
+    else if(version == QLatin1String("STATUS_EVAL") || version == QLatin1String("STATUS_REMOVE") || version == QLatin1String("STATUS_UPDATED"))
+    {
+        qDebug() << Q_FUNC_INFO << version;
+        Q_ASSERT(false);
+        return UnversionedVersion;
+    }
+    else if(version == QLatin1String("STATUS_CONFLICT"))
+    {
+        return ConflictingVersion;
+    }
+    else if(version == QLatin1String("STATUS_REMOVE"))
+    {
+        return RemovedVersion;
+    }
+    else if(version == QLatin1String("STATUS_IGNORE"))
+    {
+        return IgnoredVersion;
+    }
+
+    qWarning() << Q_FUNC_INFO << "unknown status: " << version;
+    Q_ASSERT(false);
+    return UnversionedVersion;
 }
