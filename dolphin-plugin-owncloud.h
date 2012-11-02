@@ -39,7 +39,6 @@ private:
     QLocalSocket* m_owncloudSocket;
     QMap<QString, ItemVersion> m_status;
 
-    mutable int m_count;
     QString m_socketPath;
 };
 
