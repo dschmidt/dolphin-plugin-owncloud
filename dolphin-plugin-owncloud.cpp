@@ -87,7 +87,7 @@ bool DolphinPluginOwnCloud::beginRetrieval(const QString& directory)
 void DolphinPluginOwnCloud::endRetrieval()
 {
     kDebug();
-
+    m_status.clear();
 }
 
 QList< QAction* > DolphinPluginOwnCloud::actions(const KFileItemList& items) const
