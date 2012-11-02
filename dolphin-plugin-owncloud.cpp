@@ -5,13 +5,14 @@
 #include <KDE/KPluginFactory>
 #include <KDE/KPluginLoader>
 #include <KDE/KLocalizedString>
+#include <KDE/KDebug>
 
-#include <QDebug>
 #include <QTimer>
 #include <QMessageBox>
 #include <QLocalSocket>
 #include <QThread>
 #include <QFileInfo>
+#include <QDir>
 
 K_PLUGIN_FACTORY(DolphinPluginOwnCloudFactory, registerPlugin<DolphinPluginOwnCloud>();)
 K_EXPORT_PLUGIN(DolphinPluginOwnCloudFactory("dolphin-plugin-owncloud"))
@@ -22,16 +23,17 @@ DolphinPluginOwnCloud::DolphinPluginOwnCloud(QObject* parent, const QList< QVari
     , m_owncloudSocket(new QLocalSocket(this))
 {
     Q_UNUSED(args);
-    qDebug() << Q_FUNC_INFO;
+    kDebug();
 
-    m_dummyAction = new KAction(this);
-    m_dummyAction->setIcon(KIcon("internet-web-browser"));
-    m_dummyAction->setText(i18nc("@item:inmenu", "Copy public link to clipboard"));
-    connect(m_dummyAction, SIGNAL(triggered()),
-            this, SLOT(showStupidBox()));
+    m_publicShareLinkAction = new KAction(this);
+    m_publicShareLinkAction->setIcon(KIcon(QLatin1String("internet-web-browser")));
+    m_publicShareLinkAction->setText(i18nc("@item:inmenu", "Copy public link to clipboard"));
 
     connect(m_owncloudSocket, SIGNAL(readyRead()), SLOT(onReadyRead()));
-    m_owncloudSocket->connectToServer("ownCloud");
+
+    m_socketPath = QDir::home().absolutePath().append(QLatin1String("/.local/share/data/ownCloud/socket"));
+    kDebug() << "connect to server: " << m_socketPath;
+    m_owncloudSocket->connectToServer(m_socketPath);
 }
 
 DolphinPluginOwnCloud::~DolphinPluginOwnCloud()
@@ -41,42 +43,39 @@ DolphinPluginOwnCloud::~DolphinPluginOwnCloud()
 
 bool DolphinPluginOwnCloud::beginRetrieval(const QString& directory)
 {
-    qDebug() << Q_FUNC_INFO;
+    kDebug();
 
     QLocalSocket* socket = new QLocalSocket();
 
-    sendCommand("RETRIEVE_STATUS:"+directory.toUtf8(), socket);
+    QString command(QLatin1String("RETRIEVE_FOLDER_STATUS:%1"));
+    sendCommand(command.arg(directory), socket);
     socket->waitForReadyRead();
 
     while(socket->canReadLine())
     {
-        QString line = socket->readLine().trimmed();
-        QStringList splittedLine = line.split(":");
+        QString line = QString::fromUtf8(socket->readLine().trimmed());
+        QStringList splittedLine = line.split(QLatin1String(":"));
 
         if(splittedLine.count() != 3) continue;
 
         QString filePath = splittedLine.at(2);
         QString status = splittedLine.at(1);
 
-        if(splittedLine.first().startsWith("STATUS"))
+        if(splittedLine.first().startsWith(QLatin1String("STATUS")))
         {
             QFileInfo fileInfo( filePath );
             if(fileInfo.exists())
             {
-//                 qDebug() << "storing: " << filePath << status;
                 m_status[filePath] = itemVersionForString(status);
             }
             else
-                qDebug() << "received invalid file path";
+                kDebug() << "received invalid file path";
         }
         else
         {
-            qDebug() << "Hit race condition :\"";
+            kDebug() << "Hit race condition :\"";
             Q_ASSERT(false);
         }
-
-//         qDebug() << "FILESTATUS RECEIVED: " << line;
-
     }
 
     socket->close();
@@ -87,55 +86,53 @@ bool DolphinPluginOwnCloud::beginRetrieval(const QString& directory)
 
 void DolphinPluginOwnCloud::endRetrieval()
 {
-    qDebug() << Q_FUNC_INFO;
+    kDebug();
+
 }
 
 QList< QAction* > DolphinPluginOwnCloud::actions(const KFileItemList& items) const
 {
-    qDebug() << Q_FUNC_INFO;
+    kDebug();
     m_currentUrls.clear();
     foreach(const KFileItem& item, items)
     {
         m_currentUrls.append(item.mostLocalUrl());
     }
 
-    return (QList<QAction*>() << m_dummyAction);
+    return (QList<QAction*>() << m_publicShareLinkAction);
 }
 
 KVersionControlPlugin2::ItemVersion DolphinPluginOwnCloud::itemVersion(const KFileItem& item) const
 {
-    qDebug() << Q_FUNC_INFO << item.localPath();
-
-    // pretend everything is synced until we have an api for this
     return m_status.value(item.localPath(), UnversionedVersion);
 }
 
 QString DolphinPluginOwnCloud::fileName() const
 {
     const QLatin1String fileName(".csync_journal.db");
-    qDebug() << Q_FUNC_INFO << fileName;
-    return QLatin1String(fileName);
+    kDebug() << fileName;
+    return fileName;
 }
 
 void DolphinPluginOwnCloud::sendCommand(const QString& command, QLocalSocket* socket) const
 {
+    kDebug() << command;
+
     if(!socket)
         socket = m_owncloudSocket;
 
-
-    qDebug() << Q_FUNC_INFO << command;
-
     if(!socket->isOpen())
     {
-        socket->connectToServer("ownCloud");
+        socket->connectToServer(m_socketPath);
         socket->waitForConnected();
     }
 
     QString localCommand = command;
-    socket->write(localCommand.append("\n").toUtf8());
+    localCommand.append(QLatin1String("\n"));
+    socket->write(localCommand.toUtf8());
 }
 
-void DolphinPluginOwnCloud::showStupidBox() const
+void DolphinPluginOwnCloud::getPublicShareLink() const
 {
     sendCommand(QString(QLatin1String("PUBLIC_SHARE_LINK:%1")).arg(m_currentUrls.first().toLocalFile()));
 }
@@ -146,21 +143,21 @@ void DolphinPluginOwnCloud::onReadyRead()
     QLocalSocket* socket = qobject_cast<QLocalSocket*>(sender());
     Q_ASSERT(socket);
 
-    qDebug() << "******************************* JAAAAAAAAAAAAAAAAAAAAAAA";
     while(socket->canReadLine())
     {
-        QString line = socket->readLine();
-        qDebug() << Q_FUNC_INFO << line;
-        if(line.startsWith("UPDATE_VIEW"))
+        QString line = QString::fromUtf8(socket->readLine().trimmed());
+        kDebug() << line;
+        if(line.startsWith(QLatin1String("UPDATE_VIEW")))
+        {
+            kDebug() << "sync state changed, update view";
             emit itemVersionsChanged();
+        }
     }
 }
 
 
 KVersionControlPlugin2::ItemVersion DolphinPluginOwnCloud::itemVersionForString(const QString& version) const
 {
-    qDebug() << Q_FUNC_INFO << version;
-
     if(version == QLatin1String("STATUS_NONE"))
     {
         return NormalVersion;
@@ -179,7 +176,7 @@ KVersionControlPlugin2::ItemVersion DolphinPluginOwnCloud::itemVersionForString(
     }
     else if(version == QLatin1String("STATUS_REMOVE") || version == QLatin1String("STATUS_UPDATED"))
     {
-        qDebug() << Q_FUNC_INFO << version;
+        kDebug() << version;
         return UnversionedVersion;
     }
     else if(version == QLatin1String("STATUS_CONFLICT"))

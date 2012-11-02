@@ -24,7 +24,7 @@ public:
     QString fileName() const;
 
 private slots:
-    void showStupidBox() const;
+    void getPublicShareLink() const;
     void sendCommand(const QString& command, QLocalSocket* socket = 0) const;
 
     void onReadyRead();
@@ -35,9 +35,12 @@ private:
 private:
     mutable QList<KUrl> m_currentUrls;
 
-    KAction* m_dummyAction;
+    KAction* m_publicShareLinkAction;
     QLocalSocket* m_owncloudSocket;
     QMap<QString, ItemVersion> m_status;
+
+    mutable int m_count;
+    QString m_socketPath;
 };
 
 #endif

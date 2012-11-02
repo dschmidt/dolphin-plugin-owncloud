@@ -6,6 +6,8 @@ include(KDE4Defaults)
 
 include_directories(${QT_INCLUDES} ${LIBKONQ_INCLUDE_DIR})
 
+add_definitions( -DQT_NO_CAST_FROM_ASCII )
+
 set(dolphin-plugin-owncloud_SRCS dolphin-plugin-owncloud.cpp)
 kde4_add_plugin(dolphin-plugin-owncloud ${dolphin-plugin-owncloud_SRCS})
 target_link_libraries(dolphin-plugin-owncloud ${KDE4_KIO_LIBS} ${LIBKONQ_LIBRARY})
